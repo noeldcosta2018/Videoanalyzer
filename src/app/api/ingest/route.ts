@@ -60,7 +60,11 @@ export async function POST(req: NextRequest) {
     const userClient = await createUserClient();
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      console.error("[ingest] auth failed:", authError?.message ?? "no user");
+      return NextResponse.json(
+        { error: "Unauthorized", detail: authError?.message ?? "no session" },
+        { status: 401 }
+      );
     }
 
     const db = await createServiceClient();

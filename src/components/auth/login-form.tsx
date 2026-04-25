@@ -13,9 +13,16 @@ export function LoginForm() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [magicSent, setMagicSent] = useState(false);
+  const [confirmSent, setConfirmSent] = useState(false);
 
   const supabase = createClient();
+
+  function resume() {
+    const pending = sessionStorage.getItem("pending_url");
+    sessionStorage.removeItem("pending_url");
+    router.push(pending ? `/?url=${encodeURIComponent(pending)}` : "/");
+    router.refresh();
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -24,16 +31,28 @@ export function LoginForm() {
 
     if (mode === "signin") {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) { setError(error.message); setLoading(false); return; }
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
+      resume();
     } else {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) { setError(error.message); setLoading(false); return; }
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
+      // If session is immediately available, email confirmation is disabled — go straight in
+      if (data.session) {
+        resume();
+      } else {
+        // Email confirmation required — show message
+        setConfirmSent(true);
+        setLoading(false);
+      }
     }
-
-    const pending = sessionStorage.getItem("pending_url");
-    sessionStorage.removeItem("pending_url");
-    router.push(pending ? `/?url=${encodeURIComponent(pending)}` : "/");
-    router.refresh();
   }
 
   async function handleMagicLink() {
@@ -42,17 +61,31 @@ export function LoginForm() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/` },
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     });
     setLoading(false);
     if (error) { setError(error.message); return; }
-    setMagicSent(true);
+    setConfirmSent(true);
   }
 
-  if (magicSent) {
+  if (confirmSent) {
     return (
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-6 text-center text-zinc-300 text-sm">
-        Check your email — we sent a magic link to <strong>{email}</strong>.
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-6 text-center flex flex-col gap-3">
+        <p className="text-white font-medium">Check your email</p>
+        <p className="text-zinc-400 text-sm">
+          We sent a link to <strong>{email}</strong>. Click it to{" "}
+          {mode === "signup" ? "confirm your account and sign in" : "sign in"}.
+        </p>
+        <p className="text-zinc-600 text-xs">
+          No email? Check spam, or{" "}
+          <button
+            onClick={() => setConfirmSent(false)}
+            className="underline text-zinc-400 hover:text-white"
+          >
+            try again
+          </button>
+          .
+        </p>
       </div>
     );
   }
@@ -69,10 +102,11 @@ export function LoginForm() {
       />
       <Input
         type="password"
-        placeholder="Password"
+        placeholder="Password (min 6 characters)"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         required
+        minLength={6}
         className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500 h-11"
       />
 
@@ -93,7 +127,7 @@ export function LoginForm() {
         disabled={loading}
         className="h-11 border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800"
       >
-        Email me a magic link
+        Email me a magic link instead
       </Button>
 
       <p className="text-center text-zinc-500 text-sm">
@@ -103,7 +137,7 @@ export function LoginForm() {
           onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(""); }}
           className="text-zinc-300 hover:text-white underline"
         >
-          {mode === "signin" ? "Sign up" : "Sign in"}
+          {mode === "signin" ? "Sign up free" : "Sign in"}
         </button>
       </p>
     </form>
