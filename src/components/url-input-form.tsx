@@ -29,9 +29,21 @@ export function UrlInputForm() {
     }
 
     setLoading(true);
-    // TODO: POST to /api/ingest → get notebook id → redirect
-    // For now redirect to a placeholder notebook route
-    router.push(`/notebook/demo?url=${encodeURIComponent(url.trim())}`);
+    const res = await fetch("/api/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ youtube_url: url.trim() }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.error || "Something went wrong. Please try again.");
+      setLoading(false);
+      return;
+    }
+
+    router.push(`/notebook/${data.notebook_id}`);
   }
 
   return (
