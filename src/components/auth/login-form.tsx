@@ -30,7 +30,9 @@ export function LoginForm() {
       if (error) { setError(error.message); setLoading(false); return; }
     }
 
-    router.push("/");
+    const pending = sessionStorage.getItem("pending_url");
+    sessionStorage.removeItem("pending_url");
+    router.push(pending ? `/?url=${encodeURIComponent(pending)}` : "/");
     router.refresh();
   }
 

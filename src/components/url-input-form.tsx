@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -11,9 +11,23 @@ function isYouTubeUrl(url: string) {
 
 export function UrlInputForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Pre-fill + auto-submit if redirected back from login with a pending URL
+  useEffect(() => {
+    const pending = searchParams.get("url");
+    if (pending) {
+      setUrl(pending);
+      // Small delay so the form renders before submitting
+      setTimeout(() => {
+        document.getElementById("analyze-btn")?.click();
+      }, 100);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,6 +51,13 @@ export function UrlInputForm() {
 
     const data = await res.json();
 
+    if (res.status === 401) {
+      // Save URL so we can resume after login
+      sessionStorage.setItem("pending_url", url.trim());
+      router.push("/login");
+      return;
+    }
+
     if (!res.ok) {
       setError(data.error || "Something went wrong. Please try again.");
       setLoading(false);
@@ -59,6 +80,7 @@ export function UrlInputForm() {
           aria-label="YouTube URL"
         />
         <Button
+          id="analyze-btn"
           type="submit"
           disabled={loading}
           className="h-12 px-6 font-semibold bg-white text-zinc-950 hover:bg-zinc-100"
