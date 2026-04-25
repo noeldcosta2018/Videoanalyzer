@@ -1,9 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SummaryView } from "./summary-view";
 import { DetailedView } from "./detailed-view";
 import type { GeminiVideoResult } from "@/lib/gemini/ingestVideo";
+
+const MindMap = dynamic(
+  () => import("./mind-map").then((m) => m.MindMap),
+  { ssr: false }
+);
 
 interface Notebook {
   id: string;
@@ -57,7 +63,7 @@ export function NotebookView({ notebook, source }: Props) {
       </header>
 
       {/* Body */}
-      <main className="flex-1 px-4 py-6 max-w-4xl w-full mx-auto">
+      <main className="flex-1 px-4 py-6 w-full max-w-[1400px] mx-auto">
         {isFailed && (
           <div className="rounded-lg border border-red-800 bg-red-950/30 p-4 text-red-400 text-sm">
             Processing failed. Please try submitting the video again.
@@ -81,14 +87,29 @@ export function NotebookView({ notebook, source }: Props) {
               <TabsTrigger value="detailed" className="data-[state=active]:bg-zinc-700">
                 Detailed
               </TabsTrigger>
+              <TabsTrigger value="mindmap" className="data-[state=active]:bg-zinc-700">
+                Mind Map
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="summary">
-              <SummaryView gemini={gemini} youtubeUrl={notebook.youtube_url} />
+              <div className="max-w-4xl">
+                <SummaryView gemini={gemini} youtubeUrl={notebook.youtube_url} />
+              </div>
             </TabsContent>
 
             <TabsContent value="detailed">
-              <DetailedView gemini={gemini} youtubeUrl={notebook.youtube_url} />
+              <div className="max-w-4xl">
+                <DetailedView gemini={gemini} youtubeUrl={notebook.youtube_url} />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="mindmap">
+              <MindMap
+                gemini={gemini}
+                title={notebook.title}
+                youtubeUrl={notebook.youtube_url}
+              />
             </TabsContent>
           </Tabs>
         )}
