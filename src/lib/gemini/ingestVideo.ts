@@ -62,7 +62,7 @@ const VIDEO_SCHEMA = {
       },
     },
   },
-  required: ["language", "duration_seconds", "summary_short", "chapters", "transcript"],
+  required: ["title", "language", "duration_seconds", "summary_short", "chapters", "transcript"],
 };
 
 const PROMPT = `You are watching a video to help a user study, work, or repurpose it.

@@ -116,7 +116,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Video processing failed" }, { status: 502 });
     }
 
-    const title = geminiResult.title || "Untitled Notebook";
+    // Derive title: Gemini result → first chapter title → first 8 words of summary
+    const title =
+      geminiResult.title ||
+      geminiResult.chapters?.[0]?.title ||
+      geminiResult.summary_short?.split(" ").slice(0, 8).join(" ") + "…" ||
+      "Untitled Notebook";
 
     // Persist results
     await Promise.all([

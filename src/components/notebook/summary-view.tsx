@@ -1,5 +1,4 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import type { GeminiVideoResult } from "@/lib/gemini/ingestVideo";
 
 interface Props {
@@ -10,76 +9,106 @@ interface Props {
 export function SummaryView({ gemini, youtubeUrl }: Props) {
   return (
     <ScrollArea className="h-[calc(100vh-180px)]">
-      <div className="flex flex-col gap-8 pr-4">
-        {/* TL;DR */}
-        <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">
-            TL;DR
-          </h2>
-          <p className="text-zinc-200 leading-relaxed text-[15px]">
+      <div className="flex flex-col gap-10 pr-4 pb-12 max-w-3xl">
+
+        {/* Overview */}
+        <div className="rounded-xl border border-zinc-700 bg-zinc-900 px-6 py-5">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 mb-3">
+            Overview
+          </p>
+          <p className="text-zinc-100 text-[15px] leading-7">
             {gemini.summary_short}
           </p>
-        </section>
-
-        <Separator className="bg-zinc-800" />
+        </div>
 
         {/* Chapters */}
-        {gemini.chapters.length > 0 && (
-          <section>
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-4">
-              Chapters
-            </h2>
-            <ol className="flex flex-col gap-4">
-              {gemini.chapters.map((chapter, i) => (
-                <li key={i} className="flex gap-4">
-                  <a
-                    href={youtubeUrl ? timestampUrl(youtubeUrl, chapter.start_sec) : undefined}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-zinc-500 font-mono pt-0.5 hover:text-zinc-300 shrink-0 w-12 text-right"
-                    title="Jump to timestamp"
-                  >
-                    {formatTime(chapter.start_sec)}
-                  </a>
-                  <div className="flex flex-col gap-1">
-                    <span className="font-medium text-white text-sm">
+        <div className="flex flex-col gap-8">
+          {gemini.chapters.map((chapter, i) => {
+            const chapterUrl = youtubeUrl
+              ? timestampUrl(youtubeUrl, chapter.start_sec)
+              : null;
+            const duration = gemini.chapters[i + 1]
+              ? gemini.chapters[i + 1].start_sec - chapter.start_sec
+              : gemini.duration_seconds - chapter.start_sec;
+
+            return (
+              <div key={i} className="flex flex-col gap-2">
+                {/* Chapter heading row */}
+                <div className="flex items-baseline justify-between gap-4">
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-[11px] font-mono text-zinc-600 shrink-0">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <h3 className="text-white font-semibold text-[15px] leading-snug">
                       {chapter.title}
-                    </span>
-                    <span className="text-zinc-400 text-sm leading-relaxed">
-                      {chapter.summary}
-                    </span>
+                    </h3>
                   </div>
-                </li>
-              ))}
-            </ol>
-          </section>
-        )}
+                  <div className="flex items-center gap-3 shrink-0">
+                    {duration > 0 && (
+                      <span className="text-[11px] text-zinc-600 font-mono">
+                        {formatDuration(duration)}
+                      </span>
+                    )}
+                    {chapterUrl && (
+                      <a
+                        href={chapterUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] font-mono text-zinc-500 hover:text-zinc-300 transition-colors"
+                        title="Watch this section"
+                      >
+                        {formatTime(chapter.start_sec)} ↗
+                      </a>
+                    )}
+                  </div>
+                </div>
 
-        <Separator className="bg-zinc-800" />
+                {/* Divider */}
+                <div className="h-px bg-zinc-800" />
 
-        {/* Key moments */}
+                {/* Chapter body */}
+                <p className="text-zinc-300 text-[14px] leading-7 pt-1">
+                  {chapter.summary}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Key Insights */}
         {gemini.key_moments && gemini.key_moments.length > 0 && (
-          <section>
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-4">
-              Key Moments
-            </h2>
+          <div className="rounded-xl border border-zinc-700 bg-zinc-900 px-6 py-5">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 mb-4">
+              Key Insights
+            </p>
             <ul className="flex flex-col gap-3">
-              {gemini.key_moments.map((moment, i) => (
-                <li key={i} className="flex gap-4 items-start">
-                  <a
-                    href={youtubeUrl ? timestampUrl(youtubeUrl, moment.at_sec) : undefined}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-zinc-500 font-mono pt-0.5 hover:text-zinc-300 shrink-0 w-12 text-right"
-                  >
-                    {formatTime(moment.at_sec)}
-                  </a>
-                  <span className="text-zinc-300 text-sm leading-relaxed">{moment.why}</span>
-                </li>
-              ))}
+              {gemini.key_moments.map((moment, i) => {
+                const mUrl = youtubeUrl
+                  ? timestampUrl(youtubeUrl, moment.at_sec)
+                  : null;
+                return (
+                  <li key={i} className="flex gap-3 items-start">
+                    <span className="text-zinc-600 mt-1 shrink-0">•</span>
+                    <span className="text-zinc-300 text-[14px] leading-6 flex-1">
+                      {moment.why}
+                    </span>
+                    {mUrl && (
+                      <a
+                        href={mUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] font-mono text-zinc-600 hover:text-zinc-400 shrink-0 mt-0.5 transition-colors"
+                      >
+                        {formatTime(moment.at_sec)} ↗
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
-          </section>
+          </div>
         )}
+
       </div>
     </ScrollArea>
   );
@@ -93,12 +122,20 @@ function formatTime(seconds: number) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+function formatDuration(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  if (m === 0) return `${s}s`;
+  if (s === 0) return `${m}m`;
+  return `${m}m ${s}s`;
+}
+
 function timestampUrl(youtubeUrl: string, seconds: number) {
   try {
     const url = new URL(youtubeUrl);
     url.searchParams.set("t", String(Math.floor(seconds)));
     return url.toString();
   } catch {
-    return youtubeUrl;
+    return null;
   }
 }
