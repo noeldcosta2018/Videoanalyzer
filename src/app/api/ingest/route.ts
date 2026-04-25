@@ -113,7 +113,11 @@ export async function POST(req: NextRequest) {
       await db.from("notebooks").update({ status: "failed" }).eq("id", notebook.id);
       await db.from("sources").update({ status: "failed" }).eq("id", source.id);
       console.error("Gemini ingestion failed:", err);
-      return NextResponse.json({ error: "Video processing failed" }, { status: 502 });
+      const isQuota = (err as { status?: number }).status === 429;
+      return NextResponse.json(
+        { error: isQuota ? "Gemini API quota exceeded. Please wait a minute and try again." : "Video processing failed" },
+        { status: 502 }
+      );
     }
 
     // Derive title: Gemini result → first chapter title → first 8 words of summary

@@ -83,7 +83,8 @@ For the video provided:
 Be precise on timestamps (±2 seconds). Do not invent content not in the video.
 Respond ONLY in the JSON schema provided.`;
 
-const RETRYABLE_CODES = ["RESOURCE_EXHAUSTED", "DEADLINE_EXCEEDED", "UNAVAILABLE"];
+// HTTP status codes that are worth retrying (transient server errors only — not 429 quota)
+const RETRYABLE_STATUSES = [503, 504];
 
 async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -140,8 +141,8 @@ export async function ingestVideo(input: {
 
       return JSON.parse(response.text!) as GeminiVideoResult;
     } catch (err: unknown) {
-      const code = (err as { code?: string }).code;
-      const isRetryable = code && RETRYABLE_CODES.includes(code);
+      const httpStatus = (err as { status?: number }).status;
+      const isRetryable = httpStatus !== undefined && RETRYABLE_STATUSES.includes(httpStatus);
 
       if (!isRetryable || attempt === MAX_RETRIES - 1) throw err;
 
