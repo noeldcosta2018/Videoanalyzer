@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { ingestVideo } from "@/lib/gemini/ingestVideo";
+import { uploadFileToGemini } from "@/lib/gemini/uploadFile";
+
+// Allow up to 5 minutes — needed for Supabase download + Gemini upload + analysis
+export const maxDuration = 300;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDB = any;
@@ -46,17 +50,36 @@ async function createUserClient() {
   );
 }
 
+function mimeFromPath(storagePath: string): string {
+  const ext = storagePath.split(".").pop()?.toLowerCase();
+  const map: Record<string, string> = {
+    mp4: "video/mp4",
+    webm: "video/webm",
+    mov: "video/quicktime",
+    avi: "video/x-msvideo",
+    mpeg: "video/mpeg",
+    mpg: "video/mpeg",
+    mkv: "video/x-matroska",
+  };
+  return map[ext ?? ""] ?? "video/mp4";
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { youtube_url } = await req.json();
+    const body = await req.json();
+    const { youtube_url, storage_path } = body;
 
-    if (!youtube_url || !isYouTubeUrl(youtube_url)) {
+    const isYouTube = !!youtube_url;
+    const isUpload = !!storage_path;
+
+    if (!isYouTube && !isUpload) {
+      return NextResponse.json({ error: "Provide youtube_url or storage_path" }, { status: 400 });
+    }
+    if (isYouTube && !isYouTubeUrl(youtube_url)) {
       return NextResponse.json({ error: "Invalid YouTube URL" }, { status: 400 });
     }
 
-    const url = youtube_url.trim() as string;
-
-    // Identify the calling user
+    // Auth
     const userClient = await createUserClient();
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) {
@@ -69,23 +92,30 @@ export async function POST(req: NextRequest) {
 
     const db = await createServiceClient();
 
-    // Deduplicate: return existing ready notebook for this URL
-    const { data: existing } = await db
-      .from("notebooks")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("youtube_url", url)
-      .eq("status", "ready")
-      .maybeSingle();
+    // Deduplicate: return existing ready notebook for the same YouTube URL
+    if (isYouTube) {
+      const url = youtube_url.trim() as string;
+      const { data: existing } = await db
+        .from("notebooks")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("youtube_url", url)
+        .eq("status", "ready")
+        .maybeSingle();
 
-    if (existing) {
-      return NextResponse.json({ notebook_id: existing.id });
+      if (existing) {
+        return NextResponse.json({ notebook_id: existing.id });
+      }
     }
 
     // Create notebook (pending)
+    const notebookInsert = isYouTube
+      ? { user_id: user.id, youtube_url: youtube_url.trim() }
+      : { user_id: user.id };
+
     const { data: notebook, error: nbError } = await db
       .from("notebooks")
-      .insert({ user_id: user.id, youtube_url: url })
+      .insert(notebookInsert)
       .select("id")
       .single();
 
@@ -94,9 +124,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Create source row (pending)
+    const sourceInsert = isYouTube
+      ? { notebook_id: notebook.id, kind: "youtube_url", url: youtube_url.trim() }
+      : { notebook_id: notebook.id, kind: "upload_video", r2_key: storage_path };
+
     const { data: source, error: srcError } = await db
       .from("sources")
-      .insert({ notebook_id: notebook.id, kind: "youtube_url", url })
+      .insert(sourceInsert)
       .select("id")
       .single();
 
@@ -105,10 +139,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to create source" }, { status: 500 });
     }
 
+    // For uploaded files: download from Supabase Storage → upload to Gemini Files API
+    let fileUri: string | undefined;
+    if (isUpload) {
+      try {
+        const { data: fileBlob, error: dlError } = await db.storage
+          .from("videos")
+          .download(storage_path);
+
+        if (dlError || !fileBlob) {
+          throw new Error(dlError?.message ?? "Download failed");
+        }
+
+        const mimeType = mimeFromPath(storage_path);
+        fileUri = await uploadFileToGemini(fileBlob, mimeType);
+      } catch (err) {
+        await db.from("notebooks").update({ status: "failed" }).eq("id", notebook.id);
+        await db.from("sources").update({ status: "failed" }).eq("id", source.id);
+        console.error("File upload to Gemini failed:", err);
+        return NextResponse.json({ error: "Failed to upload video for processing" }, { status: 502 });
+      }
+    }
+
     // Call Gemini — the expensive step
     let geminiResult;
     try {
-      geminiResult = await ingestVideo({ youtubeUrl: url });
+      geminiResult = isYouTube
+        ? await ingestVideo({ youtubeUrl: youtube_url.trim() })
+        : await ingestVideo({ fileUri });
     } catch (err) {
       await db.from("notebooks").update({ status: "failed" }).eq("id", notebook.id);
       await db.from("sources").update({ status: "failed" }).eq("id", source.id);
@@ -120,7 +178,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Derive title: Gemini result → first chapter title → first 8 words of summary
+    // Derive title
     const title =
       geminiResult.title ||
       geminiResult.chapters?.[0]?.title ||
