@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDB = any;
 
-const MAX_BYTES = 500 * 1024 * 1024; // 500 MB
+const MAX_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB — Gemini Files API hard limit
 const ALLOWED_TYPES = new Set([
   "video/mp4",
   "video/webm",
@@ -23,7 +23,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing fileName, fileSize, or mimeType" }, { status: 400 });
     }
     if (fileSize > MAX_BYTES) {
-      return NextResponse.json({ error: "File too large. Maximum size is 500 MB." }, { status: 413 });
+      return NextResponse.json(
+        { error: "File too large. Maximum size is 2 GB (Gemini's limit). For larger videos, compress to a lower resolution first, or upload to YouTube and use the URL instead." },
+        { status: 413 }
+      );
     }
     if (!ALLOWED_TYPES.has(mimeType)) {
       return NextResponse.json({ error: "Unsupported file type. Please upload an MP4, WebM, MOV, or MKV." }, { status: 400 });

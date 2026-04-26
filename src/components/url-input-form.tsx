@@ -177,7 +177,7 @@ export function UrlInputForm() {
       </Button>
 
       <p className="text-center text-zinc-600 text-xs">
-        MP4, WebM, MOV, MKV · up to 500 MB
+        MP4, WebM, MOV, MKV · up to 2 GB
       </p>
     </div>
   );
