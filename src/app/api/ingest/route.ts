@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
       const userMessage = isQuota
         ? "Gemini API quota exceeded. Please wait a minute and try again."
         : isTokenLimit
-        ? "Video is too long for AI processing — Gemini's limit is ~60 minutes. Try a shorter clip."
+        ? "Video is too long for AI processing — maximum is ~2 hours. Try a shorter clip."
         : "Video processing failed";
       return NextResponse.json({ error: userMessage }, { status: 502 });
     }
