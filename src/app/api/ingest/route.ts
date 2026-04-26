@@ -167,11 +167,16 @@ export async function POST(req: NextRequest) {
       await db.from("notebooks").update({ status: "failed" }).eq("id", notebook.id);
       await db.from("sources").update({ status: "failed" }).eq("id", source.id);
       console.error("Gemini ingestion failed:", err);
-      const isQuota = (err as { status?: number }).status === 429;
-      return NextResponse.json(
-        { error: isQuota ? "Gemini API quota exceeded. Please wait a minute and try again." : "Video processing failed" },
-        { status: 502 }
-      );
+      const httpStatus = (err as { status?: number }).status;
+      const errMsg = (err as { message?: string }).message ?? "";
+      const isQuota = httpStatus === 429;
+      const isTokenLimit = httpStatus === 400 && errMsg.includes("token");
+      const userMessage = isQuota
+        ? "Gemini API quota exceeded. Please wait a minute and try again."
+        : isTokenLimit
+        ? "Video is too long for AI processing — Gemini's limit is ~60 minutes. Try a shorter clip."
+        : "Video processing failed";
+      return NextResponse.json({ error: userMessage }, { status: 502 });
     }
 
     // Derive title
