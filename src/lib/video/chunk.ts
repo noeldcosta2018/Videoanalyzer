@@ -33,6 +33,7 @@ export async function extractChunk(
   if (!ffmpegPath) throw new Error("ffmpeg-static not found");
   const tmpPath = `/tmp/${Date.now()}-${startSec}.${ext}`;
   await exec(ffmpegPath, [
+    "-loglevel", "error",   // suppress progress output — default floods maxBuffer and kills the process
     "-ss", String(startSec),
     "-i", r2Url,
     "-t", String(durationSec),
@@ -40,7 +41,7 @@ export async function extractChunk(
     "-movflags", "+faststart",
     "-y",
     tmpPath,
-  ], { timeout: 300_000, maxBuffer: 10 * 1024 * 1024 });
+  ], { timeout: 600_000, maxBuffer: 100 * 1024 * 1024 });
   return tmpPath;
 }
 
