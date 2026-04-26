@@ -36,8 +36,8 @@ export async function deleteFromR2(key: string): Promise<void> {
   }));
 }
 
-export async function downloadFromR2(key: string): Promise<Blob> {
-  const url = await getSignedUrl(
+export async function getR2DownloadUrl(key: string): Promise<string> {
+  return getSignedUrl(
     getR2(),
     new GetObjectCommand({
       Bucket: process.env.R2_BUCKET_NAME!,
@@ -45,7 +45,4 @@ export async function downloadFromR2(key: string): Promise<Blob> {
     }),
     { expiresIn: 900 }
   );
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`R2 download failed: ${res.status}`);
-  return res.blob();
 }

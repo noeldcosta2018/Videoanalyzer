@@ -10,20 +10,70 @@ async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function uploadFileToGemini(blob: Blob, mimeType: string): Promise<string> {
+// Streams a file from an R2 signed URL directly to the Gemini Files API
+// using the resumable upload protocol — never loads the full file into RAM.
+export async function uploadFileToGemini(r2Url: string, mimeType: string): Promise<string> {
+  // HEAD the R2 object to get its size (required by resumable upload protocol)
+  const headRes = await fetch(r2Url, { method: "HEAD" });
+  const fileSize = Number(headRes.headers.get("content-length") ?? 0);
+  if (!fileSize) throw new Error("Could not determine file size from R2");
+
+  // Step 1: Initiate a resumable upload session with Gemini
+  const initRes = await fetch(
+    `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Upload-Protocol": "resumable",
+        "X-Goog-Upload-Command": "start",
+        "X-Goog-Upload-Header-Content-Length": String(fileSize),
+        "X-Goog-Upload-Header-Content-Type": mimeType,
+      },
+      body: JSON.stringify({ file: { display_name: "video" } }),
+    }
+  );
+  if (!initRes.ok) throw new Error(`Gemini upload init failed: ${initRes.status}`);
+
+  const uploadUrl = initRes.headers.get("x-goog-upload-url");
+  if (!uploadUrl) throw new Error("Missing x-goog-upload-url from Gemini");
+
+  // Step 2: Stream from R2 directly to Gemini — no Blob in RAM
+  const r2Res = await fetch(r2Url);
+  if (!r2Res.ok || !r2Res.body) throw new Error(`R2 stream failed: ${r2Res.status}`);
+
+  const finalRes = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": mimeType,
+      "Content-Length": String(fileSize),
+      "X-Goog-Upload-Offset": "0",
+      "X-Goog-Upload-Command": "upload, finalize",
+    },
+    body: r2Res.body,
+    // Required in Node.js 18+ to allow a streaming request body
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...(({ duplex: "half" } as any)),
+  });
+  if (!finalRes.ok) {
+    const detail = await finalRes.text().catch(() => "");
+    throw new Error(`Gemini upload finalize failed: ${finalRes.status} ${detail}`);
+  }
+
+  const fileJson = await finalRes.json() as { file?: { name?: string; uri?: string } };
+  const fileName = fileJson.file?.name;
+  if (!fileName) throw new Error("No file name in Gemini upload response");
+
+  // Step 3: Poll until Gemini finishes processing the file
   const ai = getAI();
-
-  let file = await ai.files.upload({ file: blob, config: { mimeType } });
-
-  // Poll until the file is done processing (usually 10–60s)
-  while (file.state === FileState.PROCESSING) {
+  let fileInfo = await ai.files.get({ name: fileName });
+  while (fileInfo.state === FileState.PROCESSING) {
     await sleep(3000);
-    file = await ai.files.get({ name: file.name! });
+    fileInfo = await ai.files.get({ name: fileName });
+  }
+  if (fileInfo.state === FileState.FAILED) {
+    throw new Error(`Gemini file processing failed: ${fileInfo.error?.message ?? "unknown"}`);
   }
 
-  if (file.state === FileState.FAILED) {
-    throw new Error(`Gemini file processing failed: ${file.error?.message ?? "unknown"}`);
-  }
-
-  return file.uri!;
+  return fileInfo.uri!;
 }
