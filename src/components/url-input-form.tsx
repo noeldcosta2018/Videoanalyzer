@@ -34,27 +34,39 @@ export function UrlInputForm() {
 
   async function submitToIngest(body: Record<string, string>) {
     setStage("analyzing");
-    const res = await fetch("/api/ingest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    try {
+      const res = await fetch("/api/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
 
-    const data = await res.json();
+      if (res.status === 401) {
+        if (body.youtube_url) sessionStorage.setItem("pending_url", body.youtube_url);
+        router.push("/login");
+        return;
+      }
 
-    if (res.status === 401) {
-      if (body.youtube_url) sessionStorage.setItem("pending_url", body.youtube_url);
-      router.push("/login");
-      return;
-    }
+      let data: { error?: string; notebook_id?: string };
+      try {
+        data = await res.json();
+      } catch {
+        setError(`Server error (${res.status}). Please try again.`);
+        setStage("idle");
+        return;
+      }
 
-    if (!res.ok) {
-      setError(data.error || "Something went wrong. Please try again.");
+      if (!res.ok) {
+        setError(data.error || "Something went wrong. Please try again.");
+        setStage("idle");
+        return;
+      }
+
+      router.push(`/notebook/${data.notebook_id!}`);
+    } catch {
+      setError("Request failed — check your connection and try again.");
       setStage("idle");
-      return;
     }
-
-    router.push(`/notebook/${data.notebook_id}`);
   }
 
   async function handleUrlSubmit(e: React.FormEvent) {
