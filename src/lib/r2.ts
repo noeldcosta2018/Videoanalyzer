@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 let _r2: S3Client | null = null;
@@ -27,6 +27,13 @@ export async function getPresignedUploadUrl(key: string, mimeType: string): Prom
     }),
     { expiresIn: 3600 }
   );
+}
+
+export async function deleteFromR2(key: string): Promise<void> {
+  await getR2().send(new DeleteObjectCommand({
+    Bucket: process.env.R2_BUCKET_NAME!,
+    Key: key,
+  }));
 }
 
 export async function downloadFromR2(key: string): Promise<Blob> {
