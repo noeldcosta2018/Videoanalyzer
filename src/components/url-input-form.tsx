@@ -74,6 +74,13 @@ export function UrlInputForm() {
 
     setError("");
 
+    // Client-side size check — Gemini Files API hard limit is 2 GB
+    const TWO_GB = 2 * 1024 * 1024 * 1024;
+    if (file.size > TWO_GB) {
+      setError("File too large (max 2 GB — Gemini's limit). Compress your video to 720p first, or upload it to YouTube and paste the URL.");
+      return;
+    }
+
     // Step 1: Request a presigned upload URL from our server
     setStage("uploading");
     const initRes = await fetch("/api/upload-url", {
