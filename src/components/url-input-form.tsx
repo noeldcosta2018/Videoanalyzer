@@ -79,6 +79,20 @@ export function UrlInputForm() {
     await submitToIngest({ youtube_url: url.trim() });
   }
 
+  async function probeDurationSec(file: File): Promise<number> {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const v = document.createElement("video");
+      v.preload = "metadata";
+      v.onloadedmetadata = () => {
+        URL.revokeObjectURL(url);
+        resolve(isFinite(v.duration) ? v.duration : 0);
+      };
+      v.onerror = () => { URL.revokeObjectURL(url); resolve(0); };
+      v.src = url;
+    });
+  }
+
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -89,6 +103,15 @@ export function UrlInputForm() {
     const TWO_GB = 2 * 1024 * 1024 * 1024;
     if (file.size > TWO_GB) {
       setError("File too large (max 2 GB — Gemini's limit). Compress your video to 720p first, or upload it to YouTube and paste the URL.");
+      return;
+    }
+
+    // Client-side duration check — Gemini's 1M-token context caps at ~60 min
+    const SIXTY_MIN = 60 * 60;
+    const duration = await probeDurationSec(file);
+    if (duration > SIXTY_MIN) {
+      const mins = Math.round(duration / 60);
+      setError(`Video is ${mins} min — current limit is 60 min per upload. Trim it, or paste a YouTube URL instead.`);
       return;
     }
 

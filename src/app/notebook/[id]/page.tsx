@@ -3,7 +3,6 @@ export const dynamic = "force-dynamic";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { NotebookView } from "@/components/notebook/notebook-view";
-import { ProcessingView } from "@/components/notebook/processing-view";
 
 export default async function NotebookPage({
   params,
@@ -30,10 +29,6 @@ export default async function NotebookPage({
     .single();
 
   if (!notebook) redirect("/");
-
-  if (notebook.status === "processing" || notebook.status === "pending") {
-    return <ProcessingView notebookId={id} />;
-  }
 
   if (notebook.status === "failed") {
     return (
