@@ -6,9 +6,6 @@ const nextConfig: NextConfig = {
     "@aws-sdk/s3-request-presigner",
     "ffmpeg-static",
   ],
-  experimental: {
-    after: true,
-  },
 };
 
 export default nextConfig;
