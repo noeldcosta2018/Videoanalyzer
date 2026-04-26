@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 let _r2: S3Client | null = null;
@@ -34,6 +34,14 @@ export async function deleteFromR2(key: string): Promise<void> {
     Bucket: process.env.R2_BUCKET_NAME!,
     Key: key,
   }));
+}
+
+export async function getR2ObjectSize(key: string): Promise<number> {
+  const result = await getR2().send(new HeadObjectCommand({
+    Bucket: process.env.R2_BUCKET_NAME!,
+    Key: key,
+  }));
+  return result.ContentLength ?? 0;
 }
 
 export async function getR2DownloadUrl(key: string): Promise<string> {

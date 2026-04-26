@@ -12,11 +12,8 @@ async function sleep(ms: number) {
 
 // Streams a file from an R2 signed URL directly to the Gemini Files API
 // using the resumable upload protocol — never loads the full file into RAM.
-export async function uploadFileToGemini(r2Url: string, mimeType: string): Promise<string> {
-  // HEAD the R2 object to get its size (required by resumable upload protocol)
-  const headRes = await fetch(r2Url, { method: "HEAD" });
-  const fileSize = Number(headRes.headers.get("content-length") ?? 0);
-  if (!fileSize) throw new Error("Could not determine file size from R2");
+export async function uploadFileToGemini(r2Url: string, mimeType: string, fileSize: number): Promise<string> {
+  if (!fileSize) throw new Error("fileSize is required for Gemini resumable upload");
 
   // Step 1: Initiate a resumable upload session with Gemini
   const initRes = await fetch(

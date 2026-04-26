@@ -3,7 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { ingestVideo } from "@/lib/gemini/ingestVideo";
 import { uploadFileToGemini } from "@/lib/gemini/uploadFile";
-import { getR2DownloadUrl, deleteFromR2 } from "@/lib/r2";
+import { getR2DownloadUrl, getR2ObjectSize, deleteFromR2 } from "@/lib/r2";
 
 // Allow up to 5 minutes — R2 download + Gemini upload + analysis
 export const maxDuration = 300;
@@ -144,9 +144,12 @@ export async function POST(req: NextRequest) {
     let fileUri: string | undefined;
     if (isUpload) {
       try {
-        const r2Url = await getR2DownloadUrl(storage_path);
+        const [r2Url, fileSize] = await Promise.all([
+          getR2DownloadUrl(storage_path),
+          getR2ObjectSize(storage_path),
+        ]);
         const mimeType = mimeFromPath(storage_path);
-        fileUri = await uploadFileToGemini(r2Url, mimeType);
+        fileUri = await uploadFileToGemini(r2Url, mimeType, fileSize);
         // Delete from R2 immediately — Gemini has it now, no need to keep the copy
         deleteFromR2(storage_path).catch(() => {}); // fire-and-forget, non-critical
       } catch (err) {
