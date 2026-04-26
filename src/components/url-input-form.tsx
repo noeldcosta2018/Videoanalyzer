@@ -110,7 +110,7 @@ export function UrlInputForm() {
       .uploadToSignedUrl(storagePath, token, file);
 
     if (uploadError) {
-      setError("Upload failed. Please try again.");
+      setError(uploadError.message || "Upload failed. Please try again.");
       setStage("idle");
       return;
     }
