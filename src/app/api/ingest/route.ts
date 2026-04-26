@@ -3,8 +3,9 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { ingestVideo } from "@/lib/gemini/ingestVideo";
 import { uploadFileToGemini } from "@/lib/gemini/uploadFile";
+import { downloadFromR2 } from "@/lib/r2";
 
-// Allow up to 5 minutes — needed for Supabase download + Gemini upload + analysis
+// Allow up to 5 minutes — R2 download + Gemini upload + analysis
 export const maxDuration = 300;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -139,18 +140,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to create source" }, { status: 500 });
     }
 
-    // For uploaded files: download from Supabase Storage → upload to Gemini Files API
+    // For uploaded files: download from R2 → upload to Gemini Files API
     let fileUri: string | undefined;
     if (isUpload) {
       try {
-        const { data: fileBlob, error: dlError } = await db.storage
-          .from("videos")
-          .download(storage_path);
-
-        if (dlError || !fileBlob) {
-          throw new Error(dlError?.message ?? "Download failed");
-        }
-
+        const fileBlob = await downloadFromR2(storage_path);
         const mimeType = mimeFromPath(storage_path);
         fileUri = await uploadFileToGemini(fileBlob, mimeType);
       } catch (err) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { getPresignedUploadUrl } from "@/lib/r2";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDB = any;
@@ -29,13 +30,16 @@ export async function POST(req: NextRequest) {
       );
     }
     if (!ALLOWED_TYPES.has(mimeType)) {
-      return NextResponse.json({ error: "Unsupported file type. Please upload an MP4, WebM, MOV, or MKV." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Unsupported file type. Please upload an MP4, WebM, MOV, or MKV." },
+        { status: 400 }
+      );
     }
 
     const cookieStore = await cookies();
     const supabase = createServerClient<AnyDB>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           getAll() { return cookieStore.getAll(); },
@@ -53,24 +57,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Path: {userId}/{timestamp}-{random}.{ext}
     const ext = fileName.split(".").pop()?.toLowerCase() || "mp4";
-    const storagePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const key = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
-    const { data, error } = await supabase.storage
-      .from("videos")
-      .createSignedUploadUrl(storagePath);
+    const uploadUrl = await getPresignedUploadUrl(key, mimeType);
 
-    if (error || !data) {
-      console.error("createSignedUploadUrl error:", error);
-      return NextResponse.json({ error: "Failed to create upload URL" }, { status: 500 });
-    }
-
-    return NextResponse.json({
-      uploadUrl: data.signedUrl,
-      storagePath,
-      token: data.token,
-    });
+    return NextResponse.json({ uploadUrl, storagePath: key });
   } catch (err) {
     console.error("POST /api/upload-url error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

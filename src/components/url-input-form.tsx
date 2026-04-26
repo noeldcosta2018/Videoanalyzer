@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -101,16 +100,17 @@ export function UrlInputForm() {
       return;
     }
 
-    const { storagePath, token } = initData;
+    const { uploadUrl, storagePath } = initData;
 
-    // Step 2: Upload directly to Supabase Storage via the signed URL
-    const supabase = createClient();
-    const { error: uploadError } = await supabase.storage
-      .from("videos")
-      .uploadToSignedUrl(storagePath, token, file);
+    // Step 2: Upload directly to R2 via presigned PUT URL
+    const uploadRes = await fetch(uploadUrl, {
+      method: "PUT",
+      body: file,
+      headers: { "Content-Type": file.type },
+    });
 
-    if (uploadError) {
-      setError(uploadError.message || "Upload failed. Please try again.");
+    if (!uploadRes.ok) {
+      setError(`Upload failed (${uploadRes.status}). Please try again.`);
       setStage("idle");
       return;
     }
