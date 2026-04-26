@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { ingestVideo, type GeminiVideoResult } from "@/lib/gemini/ingestVideo";
 import { uploadFileToGemini } from "@/lib/gemini/uploadFile";
@@ -70,12 +71,18 @@ function extFromPath(storagePath: string): string {
 
 // Process an uploaded video — with automatic chunking for long files.
 // Runs inside after() so it executes after the HTTP response is sent.
+// Creates its own Supabase client (cookie-free) since request context is gone.
 async function processUpload(
-  db: AnyDB,
   notebookId: string,
   sourceId: string,
   storagePath: string
 ) {
+  // Service role client — no cookies needed, bypasses RLS
+  const db = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
   try {
     const r2Url = await getR2DownloadUrl(storagePath);
     const mimeType = mimeFromPath(storagePath);
@@ -164,7 +171,8 @@ async function processUpload(
       }).eq("id", notebookId),
     ]);
   } catch (err) {
-    console.error("[ingest] background processing failed:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[ingest] background processing failed:", msg, err);
     await Promise.all([
       db.from("notebooks").update({ status: "failed" }).eq("id", notebookId),
       db.from("sources").update({ status: "failed" }).eq("id", sourceId),
@@ -281,7 +289,7 @@ export async function POST(req: NextRequest) {
     } else {
       // Uploaded video: process in background after response is sent
       after(async () => {
-        await processUpload(db, notebook.id, source.id, storage_path);
+        await processUpload(notebook.id, source.id, storage_path);
       });
     }
 
